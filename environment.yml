@@ -1,8 +1,4 @@
 name: mri_project
-channels: !!python/tuple
-  - anaconda
-  - nodefaults
-  - conda-forge
 dependencies:
   - python=3.6
   - pip
