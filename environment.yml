@@ -1,0 +1,23 @@
+name: mri_project
+channels: !!python/tuple
+  - anaconda
+  - nodefaults
+  - conda-forge
+dependencies:
+  - python=3.6
+  - pip
+  - pandas
+  - ipykernel
+  - jupyter
+  - dask
+  - distributed
+  - scikit-learn
+  - opencv
+  - seaborn
+  - tensorflow>=2.1
+
+  - pip:
+    - pathos
+    - joblib
+    - statsmodels
+    - "--editable=."

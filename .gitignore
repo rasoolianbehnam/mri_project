@@ -1,0 +1,38 @@
+# mac files
+.ds_store
+
+# byte compiled python code.
+__pycache__/
+*.py[cod]
+
+# setup.py related stuff.
+build/
+dist/
+sdist/
+eggs/
+.eggs/
+*.egg-info
+*.egg
+lib/
+lib64/
+
+# pytest and sphinx.
+.cache/
+docs/_build/
+
+# typical extension for python pickles.
+*.pkl
+
+# vim files
+ *.swp
+
+# intellij files
+*.iml
+.idea/
+
+# emacs autosave
+*~
+
+#jupyter
+jupyter/
+data/
