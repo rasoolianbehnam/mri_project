@@ -1,19 +1,19 @@
 name: mri_project
 dependencies:
   - python=3.6
-  - pip
-  - pandas
-  - ipykernel
-  - jupyter
-  - dask
-  - distributed
-  - scikit-learn
-  - opencv
-  - seaborn
-  - tensorflow>=2.1
+  - pip=20.1.1
+  - pandas=0.24.1
+  - jupyter=1.0.0
+  - dask=2.19
+  - distributed=2.19
+  - scikit-learn=0.23.1
+  - opencv=3.4.2
+  - seaborn=0.10.1
+  - tensorflow=2.1.0
 
   - pip:
-    - pathos
-    - joblib
-    - statsmodels
+    - pathos==0.2.6
+    - joblib==0.16.0
+    - statsmodels==0.11.1
+    - jupyter_contrib_nbextensions==0.5.1
     - "--editable=."

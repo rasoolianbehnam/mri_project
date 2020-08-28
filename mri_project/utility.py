@@ -155,3 +155,19 @@ def dfe(file):
     b = basename(file)
     f, e = splitext(b)
     return d, f, e
+
+muscle_colors_map = dict([x.split(',') for x in """Background ,0
+Left banana  ,250
+Right banana  ,240
+Left central  ,230
+Right central  ,220
+Bottom left  ,210
+Bottom right  ,200
+Top left  ,190
+Top right  ,180
+Btw bottom and center left  ,170
+Btw bottom and center right  ,160
+Center  ,150
+Left half banana  ,140
+Right half banana  ,130""".split('\n')])
+reverse_muscle_colors_map = {int(v): k for k, v in muscle_colors_map.items()}

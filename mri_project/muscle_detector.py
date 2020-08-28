@@ -7,6 +7,7 @@ from mri_project.utility import draw_lever_arms
 
 from mri_project.contour_ops import get_muscle_contours, sort_muscle_contours_by_dist_from_center, get_muscle_contours_dict
 import logging
+import matplotlib.pyplot as plt
 
 logger = logging.getLogger(__name__)
 
@@ -56,12 +57,54 @@ class MuscleDetector(object):
     predicted_lever_arm_images = {}
     traced_features = {}
     predicted_features = {}
+    traced_binary_mask = None
+    traced_multilabel_mask = None
+    predicted = None
+    traced_contours = None
+    predicted_contours = None
     
     def __init__(self, id_, raw_image, scale, traced_image=None):
         self.id = id_
         self.raw_image = read_image(raw_image)
         self.scale = scale
         self.traced_image = read_image(traced_image) if traced_image is not None else None
+        
+    def get_traced_binary_mask(self, img=None):
+        if img is None:
+            img = self.traced_image
+        out = get_muscles(img)
+        self.traced_binary_mask = out
+        return out
+    
+    def get_traced_multilabel_mask(self, unmatched_pixel_value=0):
+        rszd = cv2.resize(self.traced_binary_mask, self.predicted.shape[::-1])
+        cnts = get_muscle_contours(rszd)
+        cnt_map = {}
+        predicted_unique = np.unique(self.predicted)
+        result = np.zeros_like(rszd)
+        for i, cnt in enumerate(cnts, 1):
+            max_overlap = .1
+            chosen_j = unmatched_pixel_value
+            for j in predicted_unique:
+                if j == 0: continue
+                imt = np.zeros_like(rszd)
+                cv2.drawContours(imt, [cnt], -1, 1, -1)
+                common = (imt > 0) & (self.predicted > 0) & ((imt>0) == (self.predicted == j))
+                overlap = np.sum(common)
+                if overlap > max_overlap:
+                    max_overlap = overlap
+                    chosen_j = j
+                # plt.imshow(common)
+                # plt.show()
+            cnt_map[i] = chosen_j
+            cv2.drawContours(result, [cnt], -1, int(chosen_j), -1)
+        if len(cnt_map.keys()) != len(set(cnt_map.values())):
+            logger.warning(f"Matches not 100%. The map is {cnt_map}")
+        self.traced_multilabel_mask = result
+        return result
+    
+    def has_good_prediction(self):
+        return len(np.unique(self.predicted)) == len(np.unique(self.traced_multilabel_mask))
         
     
     def get_contour_areas(self):
@@ -75,7 +118,7 @@ class MuscleDetector(object):
     def get_traced_contours(self, angle):
         if self.traced_image is None:
             return
-        im_floodfill = get_muscles(self.traced_image)
+        im_floodfill = self.get_traced_binary_mask(self.traced_image)
         cnts, cnt_features, lever_image = show_lever_arms(im_floodfill, angle, False, self.scale, plot=False)
         self.traced_contours = cnts
         self.traced_lever_arm_images[angle] = lever_image
@@ -91,3 +134,19 @@ class MuscleDetector(object):
     
     def get_attributes(self):
         return [x for x in dir(self) if not x.startswith('_') and not callable(getattr(self, x))]
+    
+    @classmethod
+    def load_from_dict(cls, d):
+        x = cls(d['id'], d['raw_image'], d['scale'])
+        attrs = set(x.get_attributes())
+        assert len(d.keys() - attrs) == 0
+        for k, v in d.items():
+            setattr(x, k, v)
+        return x
+    
+    def save_to_dict(self):
+        out = {}
+        attrs = self.get_attributes()
+        for attr in attrs:
+            out[attr] = getattr(self, attr)
+        return out

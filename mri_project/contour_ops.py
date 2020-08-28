@@ -7,6 +7,11 @@ def check_uint8(img):
         raise ValueError(f"Image data type should be uint8 but is {img.dtype}")
         
         
+def get_contours(img):
+    img, cnts, hierarchy = cv2.findContours(np.uint8(img), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    return cnts
+
+
 def draw_contours(img, cnts, thickness=-1):
     check_uint8(img)
     w, h = img.shape[:2]
@@ -21,7 +26,7 @@ def elongation(cnt):
 
 
 def get_muscle_contours(img):
-    img, cnts, hierarchy = cv2.findContours(img, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    img, cnts, hierarchy = cv2.findContours(np.uint8(img), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
     cnts_areas = [cv2.contourArea(x) for x in cnts]
     mx_area = max(cnts_areas) or 1e-9
     good_cnts = [x for x, a in zip(cnts, cnts_areas) if a/mx_area>0.046 and elongation(x) < 9]
