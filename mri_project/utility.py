@@ -1,8 +1,7 @@
 import numpy as np
 import pandas as pd
-from os.path import dirname
+from os.path import dirname, splitext, basename
 import cv2
-from collections import namedtuple
 from collections import namedtuple
 from mri_project.contour_ops import *
 import logging
@@ -10,6 +9,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 Line = namedtuple("Line", 'a, b')
+
+MriImage = namedtuple("MriImage", "id raw_image traced_image muscle_contours predicted_muscles predicted_muscle_contours")
 
 def match_names_by_dir(a, b):
     a_dirs = {dirname(x): x for x in a}
@@ -100,8 +101,8 @@ def draw_lever_arms(img, sorted_cnts, angle, center_point, scale=1):
     line = line_passing_from_point_at_angle(center_point, angle)
     out = np.zeros_like(img)
     y0 = np.int32(y_on_line(0, line))
-    y1 = np.int32(y_on_line(w, line))
-    cv2.line(out, (0, y0), (w, y1), 1, 3)
+    y1 = np.int32(y_on_line(5*w, line))
+    cv2.line(out, (0, y0), (5*w, y1), 1, 3)
     center_points = get_contour_center_points(sorted_cnts)
     intersections = get_lever_arms(center_points, angle, center_point)
     
@@ -116,17 +117,24 @@ def draw_lever_arms(img, sorted_cnts, angle, center_point, scale=1):
         cv2.line(out, tuple(np.int32(cnt_center)), tuple(np.int32(intersection)), 1, 3)
         distance = np.sqrt(np.sum((cnt_center - intersection)**2)) * scale
         text_ord = tuple(np.int32(cnt_center - text_displacement))
+ 
         cv2.putText(out, '%4.2f'%distance, text_ord, text_font,   
                     text_fontScale, text_color, text_thickness, cv2.LINE_AA) 
-        lever_arms.append([*cnt_center, scale, distance])
+        lever_arms.append(
+            dict(
+                zip(
+                    ['center_x', 'center_y', 'scale', 'lever_arm'], 
+                    [*cnt_center, scale, distance]
+                )
+            )
+        )
     return out, lever_arms
 
 
 def show_lever_arms(img, angle, scale=1, ax=None, plot=True):
     if angle > np.pi:
         angle = np.pi / 360 * angle
-    im_floodfill = get_muscles(img)
-    good_cnts = get_muscle_contours(im_floodfill)
+    good_cnts = get_muscle_contours(img)
     sorted_cnts = sort_muscle_contours_by_dist_from_center(good_cnts)
     if len(good_cnts) not in {9, 11}:
         logger.warning("muscles not of size 9 or 11")
@@ -134,10 +142,16 @@ def show_lever_arms(img, angle, scale=1, ax=None, plot=True):
             sorted_cnts = sorted_cnts[:11]
     logger.info(f"Number of muscles = {len(sorted_cnts)}")
     center_point = np.int32(np.mean(sorted_cnts[0], axis=(0, 1)))
-    out, lever_arms = draw_lever_arms(im_floodfill, sorted_cnts, angle, center_point, scale)
-    out = im_floodfill+out
+    out, lever_arms = draw_lever_arms(img, sorted_cnts, angle, center_point, scale)
+    out = img+out
     if plot:
         if ax is None:
             fig, ax = plt.subplots(1, 1)
         ax.imshow(out)
     return lever_arms, out
+
+def dfe(file):
+    d = dirname(file)
+    b = basename(file)
+    f, e = splitext(b)
+    return d, f, e

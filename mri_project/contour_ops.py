@@ -32,7 +32,7 @@ def get_muscle_contours_dict(img):
     check_uint8(img)
     contours = {}
     for cls in np.unique(img):
-        contours[cls] = get_muscle_contours(np.uint8(img == cls))
+        contours[cls] = sorted(get_muscle_contours(np.uint8(img == cls)), key=lambda x: -cv2.contourArea(x))
     return contours
 
 
