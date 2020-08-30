@@ -1,9 +1,10 @@
-import numpy as np
 import logging
-import cv2
 
-from mri_project.utility import show_lever_arms
-from mri_project.contour_ops import get_muscle_contours, sort_muscle_contours_by_dist_from_center, get_muscle_contours_dict
+import cv2
+import numpy as np
+
+from mri_project.contour_ops import get_muscle_contours, sort_muscle_contours_by_dist_from_center, \
+    get_muscle_contours_dict
 from mri_project.utility import draw_lever_arms
 
 logger = logging.getLogger(__name__)
@@ -12,19 +13,20 @@ logger = logging.getLogger(__name__)
 def get_largest_contour_of_each_color(img):
     out = np.zeros_like(img)
     for c in np.unique(img):
-        _, cnts, hierarchy = cv2.findContours(np.uint8(img==c), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+        _, cnts, hierarchy = cv2.findContours(np.uint8(img == c), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
         good_cnts = sorted(cnts, key=lambda x: -cv2.contourArea(x))
         imt = np.zeros_like(img)
         cv2.drawContours(imt, good_cnts, 0, int(c), -1)
         out += imt
     return out
 
+
 def resize_muscle_image(img, shape):
     imgs = []
     for c in np.unique(img):
         this_muscle = np.uint8(img == c)
         resized = cv2.resize(this_muscle, shape)
-        res = np.uint((resized > 0)*c)
+        res = np.uint((resized > 0) * c)
         imgs.append(res)
     out = np.zeros(shape[::-1])
     for image in imgs:
@@ -37,7 +39,7 @@ def predict_image(model, x):
     if len(x.shape) == 3 and x.shape[-1] == 3:
         gray = cv2.cvtColor(x, cv2.COLOR_BGR2GRAY)
     resized_image = cv2.resize(gray, (256, 256))
-    normalized_image = (resized_image - resized_image.mean())/resized_image.std()
+    normalized_image = (resized_image - resized_image.mean()) / resized_image.std()
     inp = normalized_image.reshape(1, *normalized_image.shape, 1)
     prediction = model.predict(inp)
     res = prediction.argmax(axis=3)[0].astype('uint8')
@@ -46,8 +48,7 @@ def predict_image(model, x):
     return cleaned_res
 
 
-
-def show_lever_arms(img, angle, numbered=False, scale=1, 
+def show_lever_arms(img, angle, numbered=False, scale=1,
                     ax=None, plot=True, img_color_coefficient=1):
     if angle > np.pi:
         angle = np.pi / 180 * angle
@@ -66,7 +67,7 @@ def show_lever_arms(img, angle, numbered=False, scale=1,
     logger.info(f"Number of muscles = {len(sorted_cnts)}")
     center_point = np.int32(np.mean(sorted_cnts[0], axis=(0, 1))).reshape(-1)
     out, lever_arms = draw_lever_arms(img, sorted_cnts, angle, center_point, scale)
-    out = img_color_coefficient * img+out
+    out = img_color_coefficient * img + out
     if plot:
         if ax is None:
             fig, ax = plt.subplots(1, 1)
