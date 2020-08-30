@@ -34,7 +34,8 @@ def show_lever_arms(img, angle, numbered=False, scale=1,
         good_cnts = get_muscle_contours_dict(img)
         if good_cnts.get(0) is not None:
             del good_cnts[0]
-        sorted_cnts = [good_cnts[i][0] for i in sorted(good_cnts.keys())]
+        # print(good_cnts.keys())
+        sorted_cnts = [good_cnts[i][0] for i in sorted(good_cnts.keys()) if len(good_cnts[i])]
     else:
         good_cnts = get_muscle_contours(img)
         sorted_cnts = sort_muscle_contours_by_dist_from_center(good_cnts)
@@ -103,7 +104,9 @@ class MuscleDetector(object):
         self.traced_multilabel_mask = result
         return result
     
-    def has_good_prediction(self):
+    def has_good_prediction(self, refresh=False):
+        if refresh:
+            self.get_traced_multilabel_mask()
         return len(np.unique(self.predicted)) == len(np.unique(self.traced_multilabel_mask))
         
     
@@ -111,15 +114,23 @@ class MuscleDetector(object):
         self.traced_features['area']    = [cv2.contourArea(x)*(self.scale**2) for x in self.traced_contours]
         self.predicted_features['area'] = [cv2.contourArea(x)*(self.scale**2) for x in self.predicted_contours]
         
+    def get_contour_centers(self):
+        self.traced_features['center']    = [x.mean(axis=(0,1)) for x in self.traced_contours]
+        self.predicted_features['center'] = [x.mean(axis=(0,1)) for x in self.predicted_contours]
+ 
         
     def predict(self, model):
         self.predicted = np.uint8(predict_image(model, self.raw_image))
     
-    def get_traced_contours(self, angle):
+    def get_traced_contours(self, angle, img_color_coefficient=1/11):
         if self.traced_image is None:
             return
-        im_floodfill = self.get_traced_binary_mask(self.traced_image)
-        cnts, cnt_features, lever_image = show_lever_arms(im_floodfill, angle, False, self.scale, plot=False)
+        if self.has_good_prediction():
+            cnts, cnt_features, lever_image = show_lever_arms(self.traced_multilabel_mask, angle, True, self.scale, 
+                                                              plot=False, img_color_coefficient=img_color_coefficient)
+        else:
+            im_floodfill = self.get_traced_binary_mask(self.traced_image)
+            cnts, cnt_features, lever_image = show_lever_arms(self.traced_binary_mask, angle, False, self.scale, plot=False)
         self.traced_contours = cnts
         self.traced_lever_arm_images[angle] = lever_image
         self.traced_features[f'lever_arm_{angle}'] = [x['lever_arm'] for x in cnt_features]
