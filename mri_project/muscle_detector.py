@@ -11,6 +11,7 @@ import logging
 import matplotlib.pyplot as plt
 
 logger = logging.getLogger(__name__)
+nine_to_11_dict = {0: 0, 1: 1, 2: 4, 3: 5, 4: 6, 5: 7, 6: 8, 7: 9, 8: 10, 9: 11}
 
 
 def read_image(x):
@@ -89,7 +90,8 @@ class MuscleDetector(object):
             max_overlap = .1
             chosen_j = unmatched_pixel_value
             for j in predicted_unique:
-                if j == 0: continue
+                if j == 0:
+                    continue
                 imt = np.zeros_like(rszd)
                 cv2.drawContours(imt, [cnt], -1, 1, -1)
                 common = (imt > 0) & (self.predicted > 0) & ((imt > 0) == (self.predicted == j))
@@ -121,6 +123,7 @@ class MuscleDetector(object):
 
     def predict(self, model):
         self.predicted = np.uint8(predict_image(model, self.raw_image))
+        return self.predicted
 
     def get_traced_contours(self, angle, img_color_coefficient=1 / 11):
         if self.traced_image is None:
@@ -129,7 +132,6 @@ class MuscleDetector(object):
             cnts, cnt_features, lever_image = show_lever_arms(self.traced_multilabel_mask, angle, True, self.scale,
                                                               plot=False, img_color_coefficient=img_color_coefficient)
         else:
-            im_floodfill = self.get_traced_binary_mask(self.traced_image)
             cnts, cnt_features, lever_image = show_lever_arms(self.traced_binary_mask, angle, False, self.scale,
                                                               plot=False)
         self.traced_contours = cnts
