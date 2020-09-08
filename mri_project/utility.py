@@ -1,7 +1,10 @@
 import logging
-import pandas as pd
 from collections import namedtuple
+from functools import reduce
+from operator import add
 from os.path import dirname, splitext, basename
+
+import pandas as pd
 
 from mri_project.contour_ops import *
 
@@ -164,6 +167,34 @@ def convert_list_col_to_multiple_cols(df: pd.DataFrame, col, col_names, drop_col
         df.drop(col, axis=1, inplace=True)
 
 
+def imsshow(*images, n_cols=None, single_size=(10, 10), **ax_args):
+    n_images = len(images)
+    n_cols = n_cols or n_images
+    n_rows = n_images // n_cols
+    n_rows = n_rows + 1 if n_images % n_cols else n_rows
+    w, h = single_size
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(w*n_rows, h*n_cols))
+    if not isinstance(axes, np.ndarray):
+        axes = [axes]
+    for ax, img in zip(axes, images):
+        ax.imshow(img, **ax_args)
+    return fig, axes
+
+
+def get_outliers(x, r=1.5):
+    q1, q3 = np.percentile(x, [25, 75])
+    iqr = q3 - q1
+    cond = (x > q3 + r * iqr) | (x < q1 - r * iqr)
+    return np.where(~cond), np.where(cond)
+
+
+def break_multi_label_image(img, transform_fun=lambda x: x):
+    return {i: transform_fun(img == i) for i in np.unique(img)}
+
+
+def multi_label_image_from_dict(d):
+    x = [k*v for k, v in d.items()]
+    return np.array(list(reduce(add, x)))
 
 txt = """Background ,0
 Left banana  ,250
