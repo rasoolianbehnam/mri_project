@@ -14,6 +14,15 @@ logger = logging.getLogger(__name__)
 nine_to_11_dict = {0: 0, 1: 1, 2: 4, 3: 5, 4: 6, 5: 7, 6: 8, 7: 9, 8: 10, 9: 11}
 
 
+def convert_muscle_feature_list_to_dict(feature, start_muscle):
+    if isinstance(feature, dict):
+        return feature
+    feature = dict(enumerate(feature, start_muscle))
+    if len(feature) == 9:
+        feature = {nine_to_11_dict[k]: v for k, v in feature.items()}
+    return feature
+
+
 def read_image(x):
     if isinstance(x, str):
         x = cv2.imread(x)
@@ -114,12 +123,20 @@ class MuscleDetector(object):
         return len(np.unique(self.predicted)) == len(np.unique(self.traced_multilabel_mask))
 
     def get_contour_areas(self):
-        self.traced_features['area'] = [cv2.contourArea(x) * (self.scale ** 2) for x in self.traced_contours]
-        self.predicted_features['area'] = [cv2.contourArea(x) * (self.scale ** 2) for x in self.predicted_contours]
+        self.traced_features['area'] = convert_muscle_feature_list_to_dict(
+            [cv2.contourArea(x) * (self.scale ** 2) for x in self.traced_contours], start_muscle=1
+        )
+        self.predicted_features['area'] = convert_muscle_feature_list_to_dict(
+            [cv2.contourArea(x) * (self.scale ** 2) for x in self.predicted_contours], start_muscle=1
+        )
 
     def get_contour_centers(self):
-        self.traced_features['center'] = [x.mean(axis=(0, 1)) for x in self.traced_contours]
-        self.predicted_features['center'] = [x.mean(axis=(0, 1)) for x in self.predicted_contours]
+        self.traced_features['center'] = convert_muscle_feature_list_to_dict(
+            [x.mean(axis=(0, 1)) for x in self.traced_contours], start_muscle=1
+        )
+        self.predicted_features['center'] = convert_muscle_feature_list_to_dict(
+            [x.mean(axis=(0, 1)) for x in self.predicted_contours], start_muscle=1
+        )
 
     def predict(self, model):
         self.predicted = np.uint8(predict_image(model, self.raw_image))
@@ -136,7 +153,9 @@ class MuscleDetector(object):
                                                               plot=False)
         self.traced_contours = cnts
         self.traced_lever_arm_images[angle] = lever_image
-        self.traced_features[f'lever_arm_{angle}'] = [x['lever_arm'] for x in cnt_features]
+        self.traced_features[f'lever_arm_{angle}'] = convert_muscle_feature_list_to_dict(
+            [x['lever_arm'] for x in cnt_features] ,start_muscle=1
+        )
 
     def get_predicted_contours(self, angle, img_color_coefficient=1 / 11):
         cnts, cnt_features, lever_image = show_lever_arms(self.predicted, angle, True, self.scale,
@@ -144,7 +163,9 @@ class MuscleDetector(object):
                                                           img_color_coefficient=img_color_coefficient)
         self.predicted_contours = cnts
         self.predicted_lever_arm_images[angle] = lever_image
-        self.predicted_features[f'lever_arm_{angle}'] = [x['lever_arm'] for x in cnt_features]
+        self.predicted_features[f'lever_arm_{angle}'] = convert_muscle_feature_list_to_dict(
+            [x['lever_arm'] for x in cnt_features], start_muscle=1
+        )
 
     def get_attributes(self):
         return [x for x in dir(self) if not x.startswith('_') and not callable(getattr(self, x))]
