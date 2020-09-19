@@ -1,4 +1,3 @@
-import logging
 from collections import namedtuple
 from functools import reduce
 from operator import add
@@ -7,6 +6,9 @@ from os.path import dirname, splitext, basename
 import pandas as pd
 
 from mri_project.contour_ops import *
+import logging
+
+from mri_project.contour_ops import get_muscle_contours
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +61,7 @@ def get_muscles(img):
 
 
 def line_passing_from_point_at_angle(p, angle):
+    p = p.reshape(-1)
     x, y = p
     a = np.tan(angle)
     b = y - x * a
@@ -97,16 +100,23 @@ def get_lever_arms(center_points, angle, center_point):
     return intersections
 
 
-def draw_lever_arms(img, sorted_cnts, angle, center_point, scale=1):
-    if np.allclose(angle, np.pi / 2):
-        angle += .001
+def draw_lever_arms(img, sorted_cnts, angle, center_point=None, scale=1):
+    if angle == 90 or angle == np.pi / 2:
+        angle = 89.9
+    if angle > np.pi:
+        angle = angle * np.pi / 180
+    center_points = np.array([v.mean(axis=(0, 1)) for v in sorted_cnts])
+    # print([len(v) for v in sorted_cnts])
+    if center_point is None:
+        center_point = np.mean(center_points, axis=0)
+    # print(center_point)
     w, h = img.shape
     line = line_passing_from_point_at_angle(center_point, angle)
+    # print(line)
     out = np.zeros_like(img)
     y0 = np.int32(y_on_line(0, line))
     y1 = np.int32(y_on_line(5 * w, line))
     cv2.line(out, (0, y0), (5 * w, y1), 1, 3)
-    center_points = get_contour_center_points(sorted_cnts)
     intersections = get_lever_arms(center_points, angle, center_point)
 
     text_font = cv2.FONT_HERSHEY_SIMPLEX
@@ -132,26 +142,6 @@ def draw_lever_arms(img, sorted_cnts, angle, center_point, scale=1):
             )
         )
     return out, lever_arms
-
-
-def show_lever_arms(img, angle, scale=1, ax=None, plot=True):
-    if angle > np.pi:
-        angle = np.pi / 360 * angle
-    good_cnts = get_muscle_contours(img)
-    sorted_cnts = sort_muscle_contours_by_dist_from_center(good_cnts)
-    if len(good_cnts) not in {9, 11}:
-        logger.warning("muscles not of size 9 or 11")
-        if len(good_cnts) > 11:
-            sorted_cnts = sorted_cnts[:11]
-    logger.info(f"Number of muscles = {len(sorted_cnts)}")
-    center_point = np.int32(np.mean(sorted_cnts[0], axis=(0, 1)))
-    out, lever_arms = draw_lever_arms(img, sorted_cnts, angle, center_point, scale)
-    out = img + out
-    if plot:
-        if ax is None:
-            fig, ax = plt.subplots(1, 1)
-        ax.imshow(out)
-    return lever_arms, out
 
 
 def dfe(file):
@@ -188,13 +178,36 @@ def get_outliers(x, r=1.5):
     return np.where(~cond), np.where(cond)
 
 
-def break_multi_label_image(img, transform_fun=lambda x: x):
+def multi_label_image_to_dict(img, transform_fun=lambda x: x):
     return {i: transform_fun(img == i) for i in np.unique(img)}
 
 
 def multi_label_image_from_dict(d):
     x = [k*v for k, v in d.items()]
     return np.array(list(reduce(add, x)))
+
+
+def show_lever_arms(img, angle, binary=False, scale=1,
+                    ax=None, plot=True, img_color_coefficient=1.):
+    if angle > np.pi:
+        angle = np.pi / 180 * angle
+    cnts = get_muscle_contours_dict(img)
+    if 0 in cnts:
+        del cnts[0]
+    if binary:
+        cnts = dict(enumerate(cnts[1]))
+    else:
+        cnts = {k: v[0] for k, v in cnts.items()}
+    logger.info(f"Number of muscles = {len(cnts)}")
+    out, lever_arms = draw_lever_arms(img, cnts.values(), angle, scale=scale)
+    lever_arms = dict(zip(cnts.keys(), lever_arms))
+    out = img_color_coefficient * img + out
+    if plot:
+        if ax is None:
+            fig, ax = plt.subplots(1, 1)
+        ax.imshow(out)
+    return cnts, lever_arms, out
+
 
 txt = """Background ,0
 Left banana  ,250
@@ -212,3 +225,9 @@ Left half banana  ,140
 Right half banana  ,130"""
 muscle_colors_map = dict([x.split(',') for x in txt.split('\n')])
 reverse_muscle_colors_map = {int(v): k for k, v in muscle_colors_map.items()}
+
+
+def get_muscle_contours_dict(img):
+    res = multi_label_image_to_dict(img)
+    return {k: sorted(get_muscle_contours(v), key=lambda x: -cv2.contourArea(x))
+            for k, v in res.items()}

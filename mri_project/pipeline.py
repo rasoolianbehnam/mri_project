@@ -5,9 +5,8 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 
-from mri_project.contour_ops import get_muscle_contours, sort_muscle_contours_by_dist_from_center, \
-    get_muscle_contours_dict
-from mri_project.utility import draw_lever_arms
+from mri_project.contour_ops import get_muscle_contours, sort_muscle_contours_by_dist_from_center
+from mri_project.utility import draw_lever_arms, get_muscle_contours_dict
 
 logger = logging.getLogger(__name__)
 
