@@ -195,7 +195,7 @@ def show_lever_arms(img, angle, binary=False, scale=1,
     if 0 in cnts:
         del cnts[0]
     if binary:
-        cnts = dict(enumerate(cnts[1]))
+        cnts = dict(enumerate(cnts[1], 1))
     else:
         cnts = {k: v[0] for k, v in cnts.items() if len(v)}
     logger.info(f"Number of muscles = {len(cnts)}")
