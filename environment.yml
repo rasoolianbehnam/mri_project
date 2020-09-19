@@ -9,6 +9,7 @@ dependencies:
   - opencv=3.4.2
   - seaborn=0.10.1
   - tensorflow=2.1.0
+  - imageio=2.9.0
 
   - pip:
     - flatten-dict==0.3.0
