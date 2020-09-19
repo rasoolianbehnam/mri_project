@@ -147,6 +147,6 @@ def get_stats_(data_):
     stats_['accuracy'] = accuracy(a_, b_)
     stats_['precision'] = precision(a_, b_)
     stats_['recall'] = recall(a_, b_)
-    stats_['has_good_prediction'] = {-1, data_.has_good_prediction()}
+    stats_['has_good_prediction'] = {-1: data_.has_good_prediction()}
 
     return stats_
