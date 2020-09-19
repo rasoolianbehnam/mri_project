@@ -102,11 +102,15 @@ class MuscleDetector(object):
         self.predicted = np.uint8(predict_image(model, self.raw_image))
         return self.predicted
 
-    def get_traced_contours(self, angle, binary=False):
+    def get_traced_contours(self, angle, img_color_coefficient=1 / 11, binary=False):
         if self.traced_image is None:
             return
-        cnts, cnt_features, lever_image = show_lever_arms(self.traced_binary_mask, angle, binary=binary,
-                                                          scale=self.scale, plot=False)
+        if self.has_good_prediction():
+            cnts, cnt_features, lever_image = show_lever_arms(self.traced_multilabel_mask, angle, scale=self.scale,
+                                                              plot=False, img_color_coefficient=img_color_coefficient)
+        else:
+            cnts, cnt_features, lever_image = show_lever_arms(self.traced_binary_mask, angle, binary=True,
+                                                              scale=self.scale, plot=False)
         self.traced_contours = cnts
         self.traced_lever_arm_images[angle] = lever_image
         self.traced_features[f'lever_arm_{angle}'] = {k: x['lever_arm'] for k, x in cnt_features.items()}
