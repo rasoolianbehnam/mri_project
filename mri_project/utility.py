@@ -163,7 +163,7 @@ def imsshow(*images, n_cols=None, single_size=(10, 10), **ax_args):
     n_rows = n_images // n_cols
     n_rows = n_rows + 1 if n_images % n_cols else n_rows
     w, h = single_size
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(w*n_rows, h*n_cols))
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(w * n_rows, h * n_cols))
     if not isinstance(axes, np.ndarray):
         axes = [axes]
     for ax, img in zip(axes, images):
@@ -183,7 +183,7 @@ def multi_label_image_to_dict(img, transform_fun=lambda x: x):
 
 
 def multi_label_image_from_dict(d):
-    x = [k*v for k, v in d.items()]
+    x = [k * v for k, v in d.items()]
     return np.array(list(reduce(add, x)))
 
 
@@ -231,3 +231,17 @@ def get_muscle_contours_dict(img):
     res = multi_label_image_to_dict(img)
     return {k: sorted(get_muscle_contours(v), key=lambda x: -cv2.contourArea(x))
             for k, v in res.items()}
+
+
+def write_areas(img, centers, areas, color):
+    out = np.zeros_like(img)
+    text_font = cv2.FONT_HERSHEY_SIMPLEX
+    text_font_scale = 1
+    text_color = color
+    text_thickness = 2
+    text_displacement = np.int32(np.array([0.01098097, 0.01072961]) * np.array(img.shape))
+    for cnt, area in zip(centers, areas):
+        text_ord = tuple(np.int32(cnt - text_displacement))
+        cv2.putText(out, '%4.2f' % area, text_ord, text_font,
+                    text_font_scale, text_color, text_thickness, cv2.LINE_AA)
+    return img + out
