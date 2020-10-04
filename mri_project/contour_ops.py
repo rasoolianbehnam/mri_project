@@ -34,14 +34,6 @@ def get_muscle_contours(img):
     return good_cnts
 
 
-def get_muscle_contours_dict(img):
-    check_uint8(img)
-    contours = {}
-    for cls in np.unique(img):
-        contours[cls] = sorted(get_muscle_contours(np.uint8(img == cls)), key=lambda x: -cv2.contourArea(x))
-    return contours
-
-
 def get_center_diffs(cnts):
     centers = np.array([x[:, 0, :].mean(axis=0) for x in cnts])
     center = np.mean(centers, axis=0, keepdims=True)
