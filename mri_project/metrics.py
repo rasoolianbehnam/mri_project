@@ -1,4 +1,5 @@
 from collections import defaultdict
+import pandas as pd
 
 import joblib
 import numpy as np
@@ -93,60 +94,86 @@ def recall(pred, orig):
 def get_stats(files, model=None, transform_fun=None):
     if model is not None and not isinstance(model, dict):
         model = defaultdict(lambda x: model)
-    pred_stats = defaultdict(lambda: defaultdict(dict))
+    pred_stats = [] # defaultdict(lambda: defaultdict(dict))
     bad_files = []
     for index, file_ in enumerate(files):
-        # if index < 676: continue
         print(f"{index}: {file_}")
-        data_ = joblib.load(file_)
-        if transform_fun:
-            data_ = transform_fun(data_)
-        data_.get_traced_contours(89.8)
+        data_, bad_files_ = prepare_file(file_, model, transform_fun)
+        bad_files.extend(bad_files_)
         n_muscles = len(data_.traced_contours)
-        if model is not None:
-            try:
-                data_.predict(model[n_muscles])
-            except KeyError:
-                bad_files.append(file_)
-                continue
-        data_.get_predicted_contours(89.8)
-
-        if len(data_.traced_contours) != len(data_.predicted_contours):
-            bad_files.append(file_)
-            continue
-        data_.get_contour_areas()
-        data_.get_contour_centers()
         if n_muscles in {9, 11}:
-            pred_stats[n_muscles][data_.id] = get_stats_(data_)
+            pred_stats.append(get_stats_(data_, file_))
         else:
             bad_files.append(file_)
-    return pred_stats, bad_files
+    return pd.concat(pred_stats), bad_files
 
 
-def get_stats_(data_):
-    stats_ = {}
-    # area
-    a_ = np.array(data_.predicted_features['area'])
-    b_ = np.array(data_.traced_features['area'])
-    stats_['area_ratio'] = dict(enumerate(a_ / b_))
-    stats_['area_difference'] = dict(enumerate(np.abs(a_ - b_)))
-    # center
-    a_ = np.array(data_.predicted_features['center'])
-    b_ = np.array(data_.traced_features['center'])
-    stats_['center_distance'] = dict(enumerate(np.sqrt(np.sum((a_ - b_) ** 2, axis=1))
-                                                                        * data_.scale))
-    # lever arm
-    a_ = np.array(data_.predicted_features['lever_arm_89.8'])
-    b_ = np.array(data_.traced_features['lever_arm_89.8'])
-    stats_['lever_arm_89.8_distance'] = dict(enumerate(np.abs((a_ - b_))))
+def prepare_file(file, model, transform_fun):
+    bad_files = []
+    data = joblib.load(file)
+    if transform_fun:
+        data = transform_fun(data)
+    data.get_traced_contours(89.8)
+    n_muscles = len(data.traced_contours)
+    if model is not None:
+        try:
+            data.predict(model[n_muscles])
+        except KeyError:
+            bad_files.append(file)
+            return data, bad_files
+    data.get_predicted_contours(89.8)
 
-    # other
-    a_ = data_.predicted
-    b_ = data_.traced_multilabel_mask
-    stats_['total_accuracy'] = {-1: total_accuracy(a_, b_)}
-    stats_['accuracy'] = accuracy(a_, b_)
-    stats_['precision'] = precision(a_, b_)
-    stats_['recall'] = recall(a_, b_)
-    stats_['has_good_prediction'] = {-1: data_.has_good_prediction()}
+    if len(data.traced_contours) != len(data.predicted_contours):
+        bad_files.append(file)
+        return data, bad_files
+    data.get_contour_areas()
+    data.get_contour_centers()
+    return data, bad_files
 
-    return stats_
+
+def get_stats_(data, file=''):
+    out = pd.concat([
+        *get_various_metrics(data, 'area'),
+        *get_various_metrics(data, 'lever_arm_89.8'),
+        get_centroid_distance(data)
+    ]).reset_index()
+
+    precicted_labels = data.predicted
+    traced_labels = data.traced_multilabel_mask
+    accuracy_df = pd.DataFrame(accuracy(precicted_labels, traced_labels).items(),
+                               columns=['muscle', 'value']).assign(measure='pixel', metric='accuracy')
+    precision_df = pd.DataFrame(precision(precicted_labels, traced_labels).items(),
+                                columns=['muscle', 'value']).assign(measure='pixel', metric='precision')
+    recall_df = pd.DataFrame(recall(precicted_labels, traced_labels).items(),
+                             columns=['muscle', 'value']).assign(measure='pixel', metric='recall')
+    out = pd.concat([out, accuracy_df, precision_df, recall_df])
+    out = out.append({'muscle': -1, 'value': total_accuracy(precicted_labels, traced_labels),
+                      'measure': '-', 'metric': 'accuracy'},
+                     ignore_index=True)
+    out = out.append({'muscle': -1, 'value': total_accuracy(precicted_labels, traced_labels),
+                      'measure': '-', 'metric': 'has_good_prediction'},
+                     ignore_index=True)
+    return out.assign(file=file)
+
+
+def get_centroid_distance(data):
+    a = pd.DataFrame(data.predicted_features['center'].items(), columns=['muscle', 'value']) \
+        .set_index('muscle')
+    b = pd.DataFrame(data.traced_features['center'].items(), columns=['muscle', 'value']) \
+        .set_index('muscle')
+    diff = (a - b) ** 2
+    return (
+        pd.DataFrame(np.sqrt(diff['value'].map(np.sum)), index=diff.index).assign(measure='centroid', metric='distance')
+    )
+
+
+def get_various_metrics(data, measure):
+    a = pd.DataFrame(data.predicted_features[measure].items(), columns=['muscle', 'value']).set_index('muscle')
+    b = pd.DataFrame(data.traced_features[measure].items(), columns=['muscle', 'value']).set_index('muscle')
+    return [
+        a.assign(measure=measure, metric='predicted'),
+        b.assign(measure=measure, metric='traced'),
+        (a / b).assign(measure=measure, metric='ratio'),
+        (a - b).abs().assign(measure=measure, metric='diff'),
+        ((a - b).abs() / b).assign(measure=measure, metric='relative_diff')
+    ]

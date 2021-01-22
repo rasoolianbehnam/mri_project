@@ -99,6 +99,12 @@ def get_lever_arms(center_points, angle, center_point):
         intersections.append(line_intersection(line, l2))
     return intersections
 
+def get_center_muscle_index(center_points):
+    if center_points.shape[1] != 2:
+        raise ValueError(f"center_points should be 2-dimensionals but is of shape {center_points.shape}")
+    diff = center_points - center_points.mean(axis=0)
+    idx = np.argmin((diff**2).sum(axis=1))
+    return idx
 
 def draw_lever_arms(img, sorted_cnts, angle, center_point=None, scale=1):
     if angle == 90 or angle == np.pi / 2:
@@ -108,15 +114,15 @@ def draw_lever_arms(img, sorted_cnts, angle, center_point=None, scale=1):
     center_points = np.array([v.mean(axis=(0, 1)) for v in sorted_cnts])
     # print([len(v) for v in sorted_cnts])
     if center_point is None:
-        center_point = np.mean(center_points, axis=0)
+        center_point = center_points[get_center_muscle_index(center_points)]
     # print(center_point)
     w, h = img.shape
     line = line_passing_from_point_at_angle(center_point, angle)
     # print(line)
     out = np.zeros_like(img)
     y0 = np.int32(y_on_line(0, line))
-    y1 = np.int32(y_on_line(5 * w, line))
-    cv2.line(out, (0, y0), (5 * w, y1), 1, 3)
+    y1 = np.int32(y_on_line(1 * w, line))
+    cv2.line(out, (0, y0), (1 * w, y1), 1, 3)
     intersections = get_lever_arms(center_points, angle, center_point)
 
     text_font = cv2.FONT_HERSHEY_SIMPLEX
@@ -245,3 +251,9 @@ def write_areas(img, centers, areas, color):
         cv2.putText(out, '%4.2f' % area, text_ord, text_font,
                     text_font_scale, text_color, text_thickness, cv2.LINE_AA)
     return img + out
+
+
+def scale_img(img, max=255, dtype='uint8'):
+    mn, mx = np.min(img), np.max(img)
+    out = (img - mn)/(mx - mn)
+    return (out * max).astype(dtype)
