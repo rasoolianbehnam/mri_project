@@ -1,12 +1,14 @@
 import glob
 import logging
+import os
 from collections import namedtuple
 from functools import reduce
 from numbers import Number
 from operator import add
 from os.path import dirname, splitext, basename
-from typing import Iterable, Dict
+from typing import Iterable, Dict, Tuple
 
+import numpy as np
 import pandas as pd
 
 from mri_project.contour_ops import *
@@ -116,7 +118,7 @@ def get_center_muscle_index_v02(cnts: List[np.ndarray]) -> int:
             raise ValueError("The shape of contours must be [?, 1, 2]")
     center = np.concatenate(cnts).mean(axis=(0, 1))
     centers = np.array([cnt.mean((0, 1)) for cnt in cnts])
-    return int(np.argmin(((centers - center)**2).sum(axis=1)))
+    return int(np.argmin(((centers - center) ** 2).sum(axis=1)))
 
 
 def draw_lever_arms(img: np.ndarray, sorted_cnts: Iterable[np.ndarray], angle: float, center_point=None, scale=1):
@@ -161,6 +163,21 @@ def draw_lever_arms(img: np.ndarray, sorted_cnts: Iterable[np.ndarray], angle: f
             )
         )
     return out, lever_arms
+
+
+def longest_common_substring(s1, s2):
+    m = [[0] * (1 + len(s2)) for i in range(1 + len(s1))]
+    longest, x_longest = 0, 0
+    for x in range(1, 1 + len(s1)):
+        for y in range(1, 1 + len(s2)):
+            if s1[x - 1] == s2[y - 1]:
+                m[x][y] = m[x - 1][y - 1] + 1
+                if m[x][y] > longest:
+                    longest = m[x][y]
+                    x_longest = x
+            else:
+                m[x][y] = 0
+    return s1[x_longest - longest: x_longest]
 
 
 def dfe(file):
@@ -279,6 +296,23 @@ def scale_img(img, max=255, dtype='uint8'):
 
 def get_all_images(input_path: str, extension=''):
     if extension:
-        extension = '.'+extension
+        extension = '.' + extension
     files = glob.glob(f"{input_path}/**/*{extension}", recursive=True)
     return files
+
+
+def shape_matches(x: np.ndarray, shape: Tuple[int]) -> bool:
+    assert len(shape) == len(x.shape)
+    for x_d, true_d in zip(x.shape, shape):
+        if true_d is not None:
+            if x_d == true_d or x_d in true_d:
+                continue
+            return False
+    return True
+
+
+def replace_path(file_path, in_root, out_root):
+    abspath = os.path.abspath
+    file_path, in_root, out_root = abspath(file_path), abspath(in_root), abspath(out_root)
+    assert in_root in file_path
+    return file_path.replace(in_root, out_root)
