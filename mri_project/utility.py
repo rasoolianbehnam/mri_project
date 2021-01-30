@@ -1,13 +1,15 @@
+import glob
+import logging
 from collections import namedtuple
 from functools import reduce
+from numbers import Number
 from operator import add
 from os.path import dirname, splitext, basename
+from typing import Iterable, Dict
 
 import pandas as pd
 
 from mri_project.contour_ops import *
-import logging
-
 from mri_project.contour_ops import get_muscle_contours
 
 logger = logging.getLogger(__name__)
@@ -99,14 +101,25 @@ def get_lever_arms(center_points, angle, center_point):
         intersections.append(line_intersection(line, l2))
     return intersections
 
+
 def get_center_muscle_index(center_points):
     if center_points.shape[1] != 2:
         raise ValueError(f"center_points should be 2-dimensionals but is of shape {center_points.shape}")
     diff = center_points - center_points.mean(axis=0)
-    idx = np.argmin((diff**2).sum(axis=1))
+    idx = np.argmin((diff ** 2).sum(axis=1))
     return idx
 
-def draw_lever_arms(img, sorted_cnts, angle, center_point=None, scale=1):
+
+def get_center_muscle_index_v02(cnts: List[np.ndarray]) -> int:
+    for cnt in cnts:
+        if tuple(cnt.shape[1:]) != (1, 2):
+            raise ValueError("The shape of contours must be [?, 1, 2]")
+    center = np.concatenate(cnts).mean(axis=(0, 1))
+    centers = np.array([cnt.mean((0, 1)) for cnt in cnts])
+    return int(np.argmin(((centers - center)**2).sum(axis=1)))
+
+
+def draw_lever_arms(img: np.ndarray, sorted_cnts: Iterable[np.ndarray], angle: float, center_point=None, scale=1):
     if angle == 90 or angle == np.pi / 2:
         angle = 89.9
     if angle > np.pi:
@@ -114,7 +127,7 @@ def draw_lever_arms(img, sorted_cnts, angle, center_point=None, scale=1):
     center_points = np.array([v.mean(axis=(0, 1)) for v in sorted_cnts])
     # print([len(v) for v in sorted_cnts])
     if center_point is None:
-        center_point = center_points[get_center_muscle_index(center_points)]
+        center_point = center_points[get_center_muscle_index_v02(list(sorted_cnts))]
     # print(center_point)
     w, h = img.shape
     line = line_passing_from_point_at_angle(center_point, angle)
@@ -184,7 +197,7 @@ def get_outliers(x, r=1.5):
     return np.where(~cond), np.where(cond)
 
 
-def multi_label_image_to_dict(img, transform_fun=lambda x: x):
+def multi_label_image_to_dict(img: np.ndarray, transform_fun=lambda x: x) -> Dict[Number, np.ndarray]:
     return {i: transform_fun(img == i) for i in np.unique(img)}
 
 
@@ -197,13 +210,10 @@ def show_lever_arms(img, angle, binary=False, scale=1,
                     ax=None, plot=True, img_color_coefficient=1.):
     if angle > np.pi:
         angle = np.pi / 180 * angle
-    cnts = get_muscle_contours_dict(img)
+    cnts = get_muscle_contours_dict(img, binary)
     if 0 in cnts:
         del cnts[0]
-    if binary:
-        cnts = dict(enumerate(cnts[1], 1))
-    else:
-        cnts = {k: v[0] for k, v in cnts.items() if len(v)}
+    cnts = {k: v[0] for k, v in cnts.items() if len(v)}
     logger.info(f"Number of muscles = {len(cnts)}")
     out, lever_arms = draw_lever_arms(img, cnts.values(), angle, scale=scale)
     lever_arms = dict(zip(cnts.keys(), lever_arms))
@@ -233,10 +243,18 @@ muscle_colors_map = dict([x.split(',') for x in txt.split('\n')])
 reverse_muscle_colors_map = {int(v): k for k, v in muscle_colors_map.items()}
 
 
-def get_muscle_contours_dict(img):
+def get_muscle_contours_dict(img: np.ndarray, binary: bool) -> Dict[Number, List[np.ndarray]]:
+    """
+    :param img: a binary or multiclass image mask
+    :param binary: whether the mask is binary or not
+    :return:
+    """
     res = multi_label_image_to_dict(img)
-    return {k: sorted(get_muscle_contours(v), key=lambda x: -cv2.contourArea(x))
+    cnts = {k: sorted(get_muscle_contours(v, min_area_threshold=0.02), key=lambda x: -cv2.contourArea(x))
             for k, v in res.items()}
+    if binary:
+        cnts = dict(enumerate([[cnt] for v in cnts.values() for cnt in v]))
+    return cnts
 
 
 def write_areas(img, centers, areas, color):
@@ -255,5 +273,12 @@ def write_areas(img, centers, areas, color):
 
 def scale_img(img, max=255, dtype='uint8'):
     mn, mx = np.min(img), np.max(img)
-    out = (img - mn)/(mx - mn)
+    out = (img - mn) / (mx - mn)
     return (out * max).astype(dtype)
+
+
+def get_all_images(input_path: str, extension=''):
+    if extension:
+        extension = '.'+extension
+    files = glob.glob(f"{input_path}/**/*{extension}", recursive=True)
+    return files

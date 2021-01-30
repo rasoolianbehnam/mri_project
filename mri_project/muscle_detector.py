@@ -1,8 +1,13 @@
+import glob
+
 import cv2
+from sklearn.cluster import KMeans
 import numpy as np
 import joblib
 from mri_project.pipeline import predict_image
+from mri_project.resources import models_dir
 from mri_project.utility import get_muscles, show_lever_arms
+import mri_project.contour_ops as cntops
 
 from mri_project.contour_ops import get_muscle_contours
 import logging
@@ -25,14 +30,38 @@ def read_generic(x):
     return x
 
 
+def train_clustering_model_on_dir(img_dir_regex, n_clusters=2, rgb=False):
+    channels = 1
+    read_flag = 0
+    if rgb:
+        channels = 3
+        read_flag = 1
+    train_files = glob.glob(img_dir_regex)
+    x = np.concatenate([cv2.imread(file, read_flag).reshape(-1, channels) for file in train_files])
+    model = KMeans(n_clusters=n_clusters)
+    model.fit(x)
+    return model
+
+
+def get_thresh(img, cluster_model, rgb=False):
+    channels = 3 if rgb else 1
+    thresh = cluster_model.predict(img.reshape(-1, channels))
+    if thresh.sum() / len(thresh) > .5:
+        thresh = 1 - thresh
+    return thresh.reshape(*img.shape[:2])
+
+
 class MuscleDetector(object):
-
-
-    def __init__(self, id_, raw_image, scale, traced_image=None):
+    def __init__(self, id_, raw_image, scale=None, traced_image=None):
         self.id = id_
         self.raw_image = read_image(raw_image)
+        self.traced_image = None
         self.scale = scale
-        self.traced_image = read_image(traced_image) if traced_image is not None else None
+        if traced_image is not None:
+            self.traced_image = read_image(traced_image)
+            if scale is None:
+                clustering_model = joblib.load(models_dir+"scale_bar_clustering_model.pkl")
+                self.get_scale(clustering_model)
 
         self.traced_lever_arm_images = {}
         self.predicted_lever_arm_images = {}
@@ -43,6 +72,20 @@ class MuscleDetector(object):
         self.predicted = None
         self.traced_contours = None
         self.predicted_contours = None
+
+    def get_scale(self, clustering_model):
+        print(self.traced_image.shape)
+        thresh = get_thresh(self.traced_image.mean(axis=2), clustering_model)
+        _, cnts, _ = cntops.find_contours(thresh)
+        cnts = [cnt for cnt in cnts if len(cnt) > 50]
+        idx = np.argsort([cntops.elongation(cnt) for cnt in cnts])[::-1]
+        picked_cnts = [cnts[i] for i in idx[:1]]
+        mx = picked_cnts[0].max(axis=(0, 1))
+        mn = picked_cnts[0].min(axis=(0, 1))
+        length = np.max(mx - mn)
+        scale = 10 / length
+        self.scale = scale
+        return scale
 
     def get_traced_binary_mask(self, img=None):
         if img is None:

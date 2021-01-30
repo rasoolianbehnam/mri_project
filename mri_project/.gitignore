@@ -33,8 +33,5 @@ docs/_build/
 # Emacs autosave
 *~
 
-#jupyter
-jupyter/
-
 #data
 data/

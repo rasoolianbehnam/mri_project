@@ -1,3 +1,5 @@
+from typing import List
+
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
@@ -23,15 +25,20 @@ def draw_contours(img, cnts, thickness=-1):
 
 def elongation(cnt):
     *_, rw, rh = cv2.boundingRect(cnt)
-    return rw / rh
+    out = (rw+1e-9) / rh
+    return max(out, 1/out)
 
 
-def get_muscle_contours(img):
-    img, cnts, hierarchy = cv2.findContours(np.uint8(img), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+def get_muscle_contours(img: np.ndarray, min_area_threshold=0.02) -> List[np.ndarray]:
+    img, cnts, hierarchy = find_contours(img)
     cnts_areas = [cv2.contourArea(x) for x in cnts]
     mx_area = max(cnts_areas) or 1e-9
-    good_cnts = [x for x, a in zip(cnts, cnts_areas) if a / mx_area > 0.046 and elongation(x) < 9]
+    good_cnts = [x for x, a in zip(cnts, cnts_areas) if a / mx_area > min_area_threshold]
     return good_cnts
+
+
+def find_contours(img):
+    return cv2.findContours(np.uint8(img), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
 
 def get_center_diffs(cnts):
