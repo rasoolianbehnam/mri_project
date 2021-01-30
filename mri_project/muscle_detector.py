@@ -26,21 +26,23 @@ def read_generic(x):
 
 
 class MuscleDetector(object):
-    traced_lever_arm_images = {}
-    predicted_lever_arm_images = {}
-    traced_features = {}
-    predicted_features = {}
-    traced_binary_mask = None
-    traced_multilabel_mask = None
-    predicted = None
-    traced_contours = None
-    predicted_contours = None
+
 
     def __init__(self, id_, raw_image, scale, traced_image=None):
         self.id = id_
         self.raw_image = read_image(raw_image)
         self.scale = scale
         self.traced_image = read_image(traced_image) if traced_image is not None else None
+
+        self.traced_lever_arm_images = {}
+        self.predicted_lever_arm_images = {}
+        self.traced_features = {}
+        self.predicted_features = {}
+        self.traced_binary_mask = None
+        self.traced_multilabel_mask = None
+        self.predicted = None
+        self.traced_contours = None
+        self.predicted_contours = None
 
     def get_traced_binary_mask(self, img=None):
         if img is None:
@@ -80,6 +82,8 @@ class MuscleDetector(object):
     def has_good_prediction(self, refresh=False):
         if refresh:
             self.get_traced_multilabel_mask()
+        if self.predicted is None or self.traced_multilabel_mask is None:
+            return False
         return len(np.unique(self.predicted)) == len(np.unique(self.traced_multilabel_mask))
 
     def get_contour_areas(self):
