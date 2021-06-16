@@ -59,15 +59,9 @@ class MuscleDetector(object):
         self.scale = scale
         if traced_image is not None:
             self.traced_image = read_image(traced_image)
-<<<<<<< HEAD
         if scale is None:
             clustering_model = joblib.load(models_dir+"scale_bar_clustering_model.pkl")
             self.get_scale(clustering_model)
-=======
-            if scale is None:
-                clustering_model = joblib.load(models_dir+"scale_bar_clustering_model.pkl")
-                self.get_scale(clustering_model)
->>>>>>> 5fec8232e33a08f80decbb807f296ca308cd1d42
 
         self.traced_lever_arm_images = {}
         self.predicted_lever_arm_images = {}
@@ -80,12 +74,7 @@ class MuscleDetector(object):
         self.predicted_contours = None
 
     def get_scale(self, clustering_model):
-<<<<<<< HEAD
         thresh = get_thresh(self.raw_image.mean(axis=2), clustering_model)
-=======
-        print(self.traced_image.shape)
-        thresh = get_thresh(self.traced_image.mean(axis=2), clustering_model)
->>>>>>> 5fec8232e33a08f80decbb807f296ca308cd1d42
         _, cnts, _ = cntops.find_contours(thresh)
         cnts = [cnt for cnt in cnts if len(cnt) > 50]
         idx = np.argsort([cntops.elongation(cnt) for cnt in cnts])[::-1]

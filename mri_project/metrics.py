@@ -121,11 +121,7 @@ def prepare_file(file, model, transform_fun):
         except KeyError:
             bad_files.append(file)
             return data, bad_files
-<<<<<<< HEAD
-    data.get_and_save_level_arms(89.8)
-=======
     data.get_predicted_contours(89.8)
->>>>>>> 5fec8232e33a08f80decbb807f296ca308cd1d42
 
     if len(data.traced_contours) != len(data.predicted_contours):
         bad_files.append(file)
