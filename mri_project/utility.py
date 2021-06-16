@@ -1,13 +1,17 @@
+import glob
+import logging
+import os
 from collections import namedtuple
 from functools import reduce
+from numbers import Number
 from operator import add
 from os.path import dirname, splitext, basename
+from typing import Iterable, Dict, Tuple
 
+import numpy as np
 import pandas as pd
 
 from mri_project.contour_ops import *
-import logging
-
 from mri_project.contour_ops import get_muscle_contours
 
 logger = logging.getLogger(__name__)
@@ -100,7 +104,24 @@ def get_lever_arms(center_points, angle, center_point):
     return intersections
 
 
-def draw_lever_arms(img, sorted_cnts, angle, center_point=None, scale=1):
+def get_center_muscle_index(center_points):
+    if center_points.shape[1] != 2:
+        raise ValueError(f"center_points should be 2-dimensionals but is of shape {center_points.shape}")
+    diff = center_points - center_points.mean(axis=0)
+    idx = np.argmin((diff ** 2).sum(axis=1))
+    return idx
+
+
+def get_center_muscle_index_v02(cnts: List[np.ndarray]) -> int:
+    for cnt in cnts:
+        if tuple(cnt.shape[1:]) != (1, 2):
+            raise ValueError("The shape of contours must be [?, 1, 2]")
+    center = np.concatenate(cnts).mean(axis=(0, 1))
+    centers = np.array([cnt.mean((0, 1)) for cnt in cnts])
+    return int(np.argmin(((centers - center) ** 2).sum(axis=1)))
+
+
+def draw_lever_arms(img: np.ndarray, sorted_cnts: Iterable[np.ndarray], angle: float, center_point=None, scale=1):
     if angle == 90 or angle == np.pi / 2:
         angle = 89.9
     if angle > np.pi:
@@ -108,15 +129,15 @@ def draw_lever_arms(img, sorted_cnts, angle, center_point=None, scale=1):
     center_points = np.array([v.mean(axis=(0, 1)) for v in sorted_cnts])
     # print([len(v) for v in sorted_cnts])
     if center_point is None:
-        center_point = np.mean(center_points, axis=0)
+        center_point = center_points[get_center_muscle_index_v02(list(sorted_cnts))]
     # print(center_point)
     w, h = img.shape
     line = line_passing_from_point_at_angle(center_point, angle)
     # print(line)
     out = np.zeros_like(img)
     y0 = np.int32(y_on_line(0, line))
-    y1 = np.int32(y_on_line(5 * w, line))
-    cv2.line(out, (0, y0), (5 * w, y1), 1, 3)
+    y1 = np.int32(y_on_line(1 * w, line))
+    cv2.line(out, (0, y0), (1 * w, y1), 1, 3)
     intersections = get_lever_arms(center_points, angle, center_point)
 
     text_font = cv2.FONT_HERSHEY_SIMPLEX
@@ -142,6 +163,21 @@ def draw_lever_arms(img, sorted_cnts, angle, center_point=None, scale=1):
             )
         )
     return out, lever_arms
+
+
+def longest_common_substring(s1, s2):
+    m = [[0] * (1 + len(s2)) for i in range(1 + len(s1))]
+    longest, x_longest = 0, 0
+    for x in range(1, 1 + len(s1)):
+        for y in range(1, 1 + len(s2)):
+            if s1[x - 1] == s2[y - 1]:
+                m[x][y] = m[x - 1][y - 1] + 1
+                if m[x][y] > longest:
+                    longest = m[x][y]
+                    x_longest = x
+            else:
+                m[x][y] = 0
+    return s1[x_longest - longest: x_longest]
 
 
 def dfe(file):
@@ -178,7 +214,7 @@ def get_outliers(x, r=1.5):
     return np.where(~cond), np.where(cond)
 
 
-def multi_label_image_to_dict(img, transform_fun=lambda x: x):
+def multi_label_image_to_dict(img: np.ndarray, transform_fun=lambda x: x) -> Dict[Number, np.ndarray]:
     return {i: transform_fun(img == i) for i in np.unique(img)}
 
 
@@ -191,13 +227,10 @@ def show_lever_arms(img, angle, binary=False, scale=1,
                     ax=None, plot=True, img_color_coefficient=1.):
     if angle > np.pi:
         angle = np.pi / 180 * angle
-    cnts = get_muscle_contours_dict(img)
+    cnts = get_muscle_contours_dict(img, binary)
     if 0 in cnts:
         del cnts[0]
-    if binary:
-        cnts = dict(enumerate(cnts[1], 1))
-    else:
-        cnts = {k: v[0] for k, v in cnts.items() if len(v)}
+    cnts = {k: v[0] for k, v in cnts.items() if len(v)}
     logger.info(f"Number of muscles = {len(cnts)}")
     out, lever_arms = draw_lever_arms(img, cnts.values(), angle, scale=scale)
     lever_arms = dict(zip(cnts.keys(), lever_arms))
@@ -227,10 +260,18 @@ muscle_colors_map = dict([x.split(',') for x in txt.split('\n')])
 reverse_muscle_colors_map = {int(v): k for k, v in muscle_colors_map.items()}
 
 
-def get_muscle_contours_dict(img):
+def get_muscle_contours_dict(img: np.ndarray, binary: bool) -> Dict[Number, List[np.ndarray]]:
+    """
+    :param img: a binary or multiclass image mask
+    :param binary: whether the mask is binary or not
+    :return:
+    """
     res = multi_label_image_to_dict(img)
-    return {k: sorted(get_muscle_contours(v), key=lambda x: -cv2.contourArea(x))
+    cnts = {k: sorted(get_muscle_contours(v, min_area_threshold=0.02), key=lambda x: -cv2.contourArea(x))
             for k, v in res.items()}
+    if binary:
+        cnts = dict(enumerate([[cnt] for v in cnts.values() for cnt in v]))
+    return cnts
 
 
 def write_areas(img, centers, areas, color):
@@ -245,3 +286,33 @@ def write_areas(img, centers, areas, color):
         cv2.putText(out, '%4.2f' % area, text_ord, text_font,
                     text_font_scale, text_color, text_thickness, cv2.LINE_AA)
     return img + out
+
+
+def scale_img(img, max=255, dtype='uint8'):
+    mn, mx = np.min(img), np.max(img)
+    out = (img - mn) / (mx - mn)
+    return (out * max).astype(dtype)
+
+
+def get_all_images(input_path: str, extension=''):
+    if extension:
+        extension = '.' + extension
+    files = glob.glob(f"{input_path}/**/*{extension}", recursive=True)
+    return files
+
+
+def shape_matches(x: np.ndarray, shape: Tuple[int]) -> bool:
+    assert len(shape) == len(x.shape)
+    for x_d, true_d in zip(x.shape, shape):
+        if true_d is not None:
+            if x_d == true_d or x_d in true_d:
+                continue
+            return False
+    return True
+
+
+def replace_path(file_path, in_root, out_root):
+    abspath = os.path.abspath
+    file_path, in_root, out_root = abspath(file_path), abspath(in_root), abspath(out_root)
+    assert in_root in file_path
+    return file_path.replace(in_root, out_root)

@@ -66,7 +66,8 @@ def show_lever_arms(img, angle, numbered=False, scale=1,
         if len(good_cnts) > 11:
             sorted_cnts = sorted_cnts[:11]
     logger.info(f"Number of muscles = {len(sorted_cnts)}")
-    center_point = np.int32(np.mean(sorted_cnts[0], axis=(0, 1))).reshape(-1)
+    center_point = np.mean(sorted_cnts[0], axis=(0, 1)).reshape(-1)
+    print(center_point)
     out, lever_arms = draw_lever_arms(img, sorted_cnts, angle, center_point, scale)
     out = img_color_coefficient * img + out
     if plot:
