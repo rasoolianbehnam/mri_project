@@ -25,8 +25,10 @@ git clone https://github.com/rasoolianbehnam/mri_project.git
 cd mri_project
 
 conda env create --force
-
+```
+# Step 3: activate the conda environment and start jupyter notebook
+```bash
+cd mri_project
 conda activate mri_project
-
 jupyter notebook
 ```
